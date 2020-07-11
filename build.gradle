@@ -1,0 +1,7 @@
+ext.moduleName = 'qupath.extension.slidescore'
+
+description = 'qupath-extension-slidescore'
+
+configurations {
+    implementation.extendsFrom picocli
+}
