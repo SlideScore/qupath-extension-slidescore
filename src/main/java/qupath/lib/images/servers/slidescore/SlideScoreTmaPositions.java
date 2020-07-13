@@ -8,5 +8,6 @@ package qupath.lib.images.servers.slidescore;
  */
 public class SlideScoreTmaPositions {
     public double coreRadiusUM;
+    public long rotate;
     public SlideScoreTmaPosition[] cores;
 }

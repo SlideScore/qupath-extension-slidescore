@@ -72,6 +72,36 @@ public class SlideScoreImportTMAsCommand implements Runnable, Subcommand {
             }
             //row and col are 0-based
             maxCol++;
+            if (poss.rotate != 0) {
+                var newCores = new SlideScoreTmaPosition[poss.cores.length];
+                //90 -> i = h-y, j=x
+                //180 -> i = w-x, j=h-y
+                //270 -> i = y, j=w-x
+                //i is the new column index, j new row index
+                for (var i=0;i<maxRow;i++) {
+                    for (var j=0;j<maxCol;j++) {
+                        switch ((int)poss.rotate)
+                        {
+                            case 90:
+                                newCores[j*maxRow + i] = poss.cores[i*maxCol + (maxCol - j - 1)];
+                                break;
+                            case 180:
+                                newCores[j*maxRow + i] = poss.cores[poss.cores.length - (j*maxRow + i) - 1];
+                                break;
+                            case 270:
+                                newCores[j*maxRow + i] = poss.cores[(maxRow - i - 1)*maxCol + j];
+                                break;
+                        }
+
+                    }
+                }
+                poss.cores = newCores;
+                if (poss.rotate == 90 || poss.rotate == 270) {
+                    var temp = maxCol;
+                    maxCol = maxRow;
+                    maxRow = temp;
+                }
+            }
             int coreDiameterPX;
             if (poss.coreRadiusUM <= 0) {
                 //radius not set, use 2% of width as default
