@@ -46,6 +46,10 @@ public class SlideScoreImportTMAsCommand implements Runnable, Subcommand {
     public void run() {
         QuPathViewer viewer = qupath.getViewer();
         ImageData<BufferedImage> imageData = viewer.getImageData();
+        run(imageData);
+    }
+
+    public void run(ImageData<BufferedImage> imageData) {
         if (imageData == null) {
             Dialogs.showNoImageError("Slide Score TMA Import");
             return;
@@ -121,6 +125,8 @@ public class SlideScoreImportTMAsCommand implements Runnable, Subcommand {
 
                 var co = PathObjects.createTMACoreObject(c.x, c.y, coreDiameterPX, c.x <= 0);
                 co.setName(c.name);
+                if (poss.rotate != 0)
+                    co.putMetadataValue("rotate", Integer.toString((int)poss.rotate));
                 cores.add(co);
             }
             var myTMAGrid = DefaultTMAGrid.create(cores, maxCol);

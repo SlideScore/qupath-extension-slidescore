@@ -1,1 +1,2 @@
 qupath.lib.images.servers.slidescore.SlideScoreImportTMAsCommand
+qupath.lib.images.servers.slidescore.SlideScoreUploadAnnotationsCommand

@@ -2,27 +2,33 @@ package qupath.lib.images.servers.slidescore;
 
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import javafx.application.Application;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.gui.QuPathApp;
+import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.dialogs.Dialogs;
+import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.images.servers.*;
 import qupath.lib.images.servers.ImageServerBuilder.ServerBuilder;
 import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjectReader;
+import qupath.lib.projects.Project;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
+import java.net.*;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.*;
+
+import static qupath.lib.scripting.QP.getProject;
 
 /**
  * ImageServer implementation using Slide Score.
@@ -58,6 +64,14 @@ public class SlideScoreImageServer extends AbstractTileableImageServer implement
 
 		URL url = new URL(path);
 		uri = new URI(path);
+		Project<BufferedImage> project = QuPathGUI.getInstance().getProject();
+		if (project != null) {
+			long createdOn = project.getCreationTimestamp();
+			if (new Date(createdOn*1000).toInstant().atZone(ZoneId.systemDefault()).toLocalDate().plusYears(1).compareTo(LocalDate.now()) < 0) {
+				tokenExpired(path);
+				return;
+			}
+		}
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		try {
 			con.setRequestMethod("GET");
@@ -129,11 +143,25 @@ public class SlideScoreImageServer extends AbstractTileableImageServer implement
 				in.close();
 			}
 		}
+		catch (IOException ex) {
+			if (ex.getMessage().indexOf("503") != -1) {
+				Dialogs.showMessageDialog("Unable to open the slide", "We can't open this slide on the server. Either it's not there, or the link you've used has expired. Try requesting a new link by opening the study in your browser and clicking the Open in QuPath button.");
+				return;
+			}
+			throw ex;
+		}
 		finally {
 			con.disconnect();
 		}
 
 
+	}
+
+	private void tokenExpired(String path) throws IOException, URISyntaxException {
+		Dialogs.showMessageDialog("Slide Score access token expired", "This project file contains slide links that have expired access control tokens. We will open a page where you can upload the project file and get it back with renewed access tokens so that you can keep using the project file. QuPath will close now.");
+		String server = path.substring(0, path.indexOf("/i/"));
+		Desktop.getDesktop().browse(new URL(server + "/Studies/RenewProject").toURI());
+		System.exit(0);
 	}
 
 	public SlideScoreTmaPositions getTMAPositions() throws IOException {
@@ -166,6 +194,122 @@ public class SlideScoreImageServer extends AbstractTileableImageServer implement
 			con.disconnect();
 		}
 	}
+
+	public SlideScoreAnswer[] getAnswers() throws IOException {
+		return getAnswers(null, null);
+	}
+	public SlideScoreAnswer[] getAnswers(String question) throws IOException {
+		return getAnswers(null, null);
+	}
+
+	public SlideScoreAnswer[] getAnswers(String question, String email) throws IOException {
+		var url = new URL(uri.toString().replace("SlideScoreMetadata", "Answers"));
+		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+		try {
+			con.setRequestMethod("GET");
+			BufferedReader in = new BufferedReader(
+					new InputStreamReader(con.getInputStream()));
+			try {
+				String inputLine;
+				ArrayList<SlideScoreAnswer> ret = new ArrayList<>();
+				while ((inputLine = in.readLine()) != null) {
+					var terms = inputLine.split(";");
+					var answer = new SlideScoreAnswer();
+					answer.question = terms[0];
+					answer.email = terms[1];
+					answer.value = terms[2];
+					if (question != null && answer.question.compareToIgnoreCase(question) != 0)
+						continue;
+					if (email != null && answer.email.compareToIgnoreCase(email) != 0)
+						continue;
+					ret.add(answer);
+				}
+				return ret.toArray(new SlideScoreAnswer[0]);
+			}
+			finally {
+				in.close();
+			}
+		}
+		finally {
+			con.disconnect();
+		}
+	}
+
+
+	public String[] getQuestions() throws IOException {
+		var url = new URL(uri.toString().replace("SlideScoreMetadata", "Questions"));
+		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+		try {
+			con.setRequestMethod("GET");
+			BufferedReader in = new BufferedReader(
+					new InputStreamReader(con.getInputStream()));
+			try {
+				String inputLine;
+				StringBuffer content = new StringBuffer();
+				ArrayList<String> qs = new ArrayList();
+				while ((inputLine = in.readLine()) != null) {
+					qs.add(inputLine);
+				}
+				return qs.toArray(new String[qs.size()]);
+			}
+			finally {
+				in.close();
+			}
+		}
+		finally {
+			con.disconnect();
+		}
+	}
+
+	public String[] getAnnotationQuestions() throws IOException {
+		var qs = getQuestions();
+		var annoQs = new ArrayList<String>();
+		for(var i=0;i<qs.length;i++) {
+			var terms = qs[i].split(";");
+			if (terms[1].equals("AnnoShapes"))
+				annoQs.add(terms[0]);
+		}
+		return annoQs.toArray(new String[0]);
+	}
+
+
+	public String postAnnotation(String question, String answer) throws IOException {
+		var url = new URL(uri.toString().replace("SlideScoreMetadata", "AnnoAnswer"));
+		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+		try {
+			con.setRequestMethod("POST");
+			StringBuilder postData = new StringBuilder();
+			postData.append("question=");
+			postData.append(URLEncoder.encode(question, "UTF-8"));
+			postData.append("&answer=");
+			postData.append(URLEncoder.encode(answer, "UTF-8"));
+			byte[] postDataBytes = postData.toString().getBytes("UTF-8");
+
+			con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+			con.setRequestProperty("Content-Length", String.valueOf(postDataBytes.length));
+			con.setDoOutput(true);
+			con.getOutputStream().write(postDataBytes);
+			BufferedReader in = new BufferedReader(
+					new InputStreamReader(con.getInputStream()));
+			try {
+				String inputLine;
+				StringBuffer content = new StringBuffer();
+				ArrayList<String> qs = new ArrayList();
+				while ((inputLine = in.readLine()) != null) {
+					content.append(inputLine);
+					content.append("\n");
+				}
+				return content.toString();
+			}
+			finally {
+				in.close();
+			}
+		}
+		finally {
+			con.disconnect();
+		}
+	}
+
 
 	@Override
 	protected String createID() {

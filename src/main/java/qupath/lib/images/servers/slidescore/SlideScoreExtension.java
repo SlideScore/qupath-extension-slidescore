@@ -7,7 +7,6 @@ import qupath.lib.gui.ActionTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.extensions.QuPathExtension;
 import qupath.lib.gui.tools.MenuTools;
-import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 
 import java.awt.image.BufferedImage;
@@ -45,16 +44,54 @@ public class SlideScoreExtension implements QuPathExtension {
                     qupath.getMenu("TMA", true),
                     actionWriter);
 
+            var actionWriter2 = ActionTools.createAction(new SlideScoreUploadAnnotationsCommand(qupath), "Upload selected annotations to Slide Score");
+            actionWriter2.setLongText("Upload selected annotations to an existing question on the original Slide Score slide");
+            actionWriter2.disabledProperty().bind(
+                    Bindings.createObjectBinding(
+                            new Callable<Boolean>() {
+                                @Override
+                                public Boolean call() throws Exception {
+                                    var data = qupath.getImageData();
+                                    if (data == null) return true;
+                                    ImageServer<BufferedImage> server = data.getServer();
+                                    return !(server instanceof SlideScoreImageServer);
+                                }
+                            },
+                            qupath.imageDataProperty()
+                    ));
+            MenuTools.addMenuItems(
+                    qupath.getMenu("Objects", true),
+                    actionWriter2);
+
+            var actionWriter3 = ActionTools.createAction(new SlideScoreImportAnswersCommand(qupath), "Download annotations from Slide Score");
+            actionWriter3.setLongText("Download annotations from the original Slide Score slide and create QuPath objects from them");
+            actionWriter3.disabledProperty().bind(
+                    Bindings.createObjectBinding(
+                            new Callable<Boolean>() {
+                                @Override
+                                public Boolean call() throws Exception {
+                                    var data = qupath.getImageData();
+                                    if (data == null) return true;
+                                    ImageServer<BufferedImage> server = data.getServer();
+                                    return !(server instanceof SlideScoreImageServer);
+                                }
+                            },
+                            qupath.imageDataProperty()
+                    ));
+            MenuTools.addMenuItems(
+                    qupath.getMenu("Objects", true),
+                    actionWriter3);
+
         }
 
         @Override
         public String getName() {
-            return "Slide Score import TMA Cores";
+            return "Slide Score data connection";
         }
 
         @Override
         public String getDescription() {
-            return "Allows import of positions of TMA cores on a TMA slide from the original Slide Score slide";
+            return "Allows downloading and uploading of annotations from the original Slide Score slide and working with TMA cores";
         }
 
     }
