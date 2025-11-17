@@ -26,7 +26,7 @@ import java.util.List;
 @Command(name = "slidescore-importcores", description = "Import positions of TMA cores on a TMA slide from the original Slide Score slide", sortOptions = false)
 public class SlideScoreImportTMAsCommand implements Runnable, Subcommand {
 
-    private final static Logger logger = LoggerFactory.getLogger(SlideScoreImportTMAsCommand.class);
+    private static final Logger logger = LoggerFactory.getLogger(SlideScoreImportTMAsCommand.class);
 
     private QuPathGUI qupath;
 
@@ -112,7 +112,8 @@ public class SlideScoreImportTMAsCommand implements Runnable, Subcommand {
                 var maxpx = Math.max(width, height);
                 coreDiameterPX = 2*(int)(0.02 * maxpx);
             } else {
-                coreDiameterPX = 2*(int)(poss.coreRadiusUM * ssServer.getOriginalMetadata().getAveragedPixelSize());
+                //it's called radius but it's really diameter
+                coreDiameterPX = (int)( poss.coreRadiusUM / ssServer.getOriginalMetadata().getAveragedPixelSize());
             }
 
             List<TMACoreObject> cores = new ArrayList<>(maxRow * maxCol);

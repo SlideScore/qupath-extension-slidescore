@@ -3,12 +3,11 @@ package qupath.lib.images.servers.slidescore;
 import javafx.beans.binding.Bindings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.lib.gui.ActionTools;
-import qupath.lib.gui.QuPathGUI;
-import qupath.lib.gui.extensions.QuPathExtension;
+import qupath.lib.gui.actions.ActionTools;
 import qupath.lib.gui.tools.MenuTools;
 import qupath.lib.images.servers.ImageServer;
-
+import qupath.lib.gui.extensions.*;
+import qupath.lib.gui.*;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.Callable;
 
@@ -20,7 +19,7 @@ import java.util.concurrent.Callable;
  */
 public class SlideScoreExtension implements QuPathExtension {
 
-        private final static Logger logger = LoggerFactory.getLogger(SlideScoreExtension.class);
+        private static final Logger logger = LoggerFactory.getLogger(SlideScoreExtension.class);
 
         @Override
         public void installExtension(QuPathGUI qupath) {
@@ -91,7 +90,7 @@ public class SlideScoreExtension implements QuPathExtension {
 
         @Override
         public String getDescription() {
-            return "Allows downloading and uploading of annotations from the original Slide Score slide and working with TMA cores";
+            return "Allows downloading and uploading of annotations from the original Slide Score slide and working with TMA cores, v"+SlideScoreImageServerBuilder.version;
         }
 
     }

@@ -11,8 +11,8 @@ import qupath.lib.gui.extensions.Subcommand;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
-import qupath.lib.objects.PathAnnotationObject;
 import qupath.lib.objects.PathObject;
+import qupath.lib.objects.PathROIObject;
 import qupath.lib.objects.TMACoreObject;
 import qupath.lib.objects.hierarchy.TMAGrid;
 import qupath.lib.roi.*;
@@ -42,7 +42,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
         }
     }
 
-    private final static Logger logger = LoggerFactory.getLogger(SlideScoreUploadAnnotationsCommand.class);
+    private static final Logger logger = LoggerFactory.getLogger(SlideScoreUploadAnnotationsCommand.class);
 
     private QuPathGUI qupath;
 
@@ -165,6 +165,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
         return false;
     }
 
+
     private static String getTmaCoords(TMACoreObject tma, TMAGrid tmagrid, int r, int c) {
         String json = "";
         if (tma.getMetadataKeys().contains("rotate")) {
@@ -220,7 +221,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
         }
         var ssServer = (SlideScoreImageServer) server;
         try {
-            var annoQs = ssServer.getAnnotationQuestions();
+            var annoQs = ssServer.getAnnotationShapeQuestions();
             if (question == null && annoQs.length == 0) {
                 Dialogs.showErrorMessage("Slide Score annotation upload", "No annotation type questions found.");
                 return;
@@ -228,9 +229,9 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
             boolean hasPoints = false;
             boolean hasNonPoints = false;
             for (PathObject obj : annotations) {
-                if (!(obj instanceof PathAnnotationObject))
+                if (!(obj instanceof PathROIObject))
                     continue;
-                var anno = (PathAnnotationObject)obj;
+                var anno = (PathROIObject)obj;
                 var roi = anno.getROI();
                 if (roi instanceof PointsROI) {
                     hasPoints = true;
@@ -268,7 +269,10 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
             } else {
                 json = annotationsToJson(annotations);
             }
-            ssServer.postAnnotation(q, json);
+            if (tmagrid == null && json.length() > 100000)
+                ssServer.postLargeAnnotation(q, json);
+            else
+                ssServer.postAnnotation(q, json);
             logger.info("Successfully uploaded annotations");
         } catch (Exception ex) {
             Dialogs.showErrorMessage("Slide Score annotation upload", "Annotation upload failed, see log.");
@@ -306,9 +310,9 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
             boolean hasPoints = false;
             boolean hasNonPoints = false;
             for (PathObject obj : annotations) {
-                if (!(obj instanceof PathAnnotationObject))
+                if (!(obj instanceof PathROIObject))
                     continue;
-                var anno = (PathAnnotationObject)obj;
+                var anno = (PathROIObject)obj;
                 var roi = anno.getROI();
                 if (roi instanceof PointsROI) {
                     hasPoints = true;
@@ -336,7 +340,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
                 for (var r=0; r < tmagrid.getGridHeight(); r++) {
                     for (var c=0; c < tmagrid.getGridWidth(); c++) {
                         var tma = tmagrid.getTMACore(r, c);
-                        if (tma.getUniqueID() != core.getUniqueID()) continue;
+                        if (tma.getID() != core.getID()) continue;
                         var tmaAnnosJson = resGetter.getAnswer(annotations, tma);
                         if (tmaAnnosJson.equals("[]")) {
                             //logger.info("No results for TMA Core row "+Integer.toString(r) +" col: "+Integer.toString(c) +" skipping");
@@ -362,17 +366,11 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
 
     private static String annotationsToJson(Collection<PathObject> objects) {
         boolean hasGeometry = false;
-        for (PathObject obj : objects) {
-            if (!(obj instanceof PathAnnotationObject))
-                continue;
-            var anno = (PathAnnotationObject)obj;
-            var roi = anno.getROI();
-        }
         StringJoiner mainsj = new StringJoiner(",");
         for (PathObject obj : objects) {
-            if (!(obj instanceof PathAnnotationObject))
+            if (!(obj instanceof PathROIObject))
                 continue;
-            var anno = (PathAnnotationObject) obj;
+            var anno = (PathROIObject) obj;
             var roi = anno.getROI();
             if (roi instanceof EllipseROI) {
                 EllipseROI ellipse = (EllipseROI) roi;
@@ -414,9 +412,9 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
             ArrayList<Coordinate[]> positives = new ArrayList<Coordinate[]>();
             ArrayList<Coordinate[]> negatives = new ArrayList<Coordinate[]>();
             for (PathObject obj : objects) {
-                if (!(obj instanceof PathAnnotationObject))
+                if (!(obj instanceof PathROIObject))
                     continue;
-                var anno = (PathAnnotationObject) obj;
+                var anno = (PathROIObject) obj;
                 var roi = anno.getROI();
                 if (roi instanceof GeometryROI) {
                     GeometryROI geo = (GeometryROI) roi;

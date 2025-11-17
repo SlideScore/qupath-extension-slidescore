@@ -4,10 +4,13 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import qupath.lib.geom.Point2;
+import qupath.lib.gui.ExtensionClassLoader;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.dialogs.Dialogs;
 import qupath.lib.gui.extensions.Subcommand;
+import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
@@ -15,6 +18,7 @@ import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObjects;
 import qupath.lib.objects.classes.PathClassFactory;
 import qupath.lib.regions.ImagePlane;
+import qupath.lib.roi.PointsROI;
 import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
 
@@ -25,6 +29,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Locale;
 
 /**
  * Command to import answers (results) from Slide Score for a slide.
@@ -33,10 +38,10 @@ import java.util.HashSet;
  *
  */
 
-@CommandLine.Command(name = "slidescore-importanswers", description = "Import answers (results) from Slide Score for a slide.", sortOptions = false)
+@Command(name = "slidescore-importanswers", description = "Import answers (results) from Slide Score for a slide.", sortOptions = false)
 public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
 
-    private final static Logger logger = LoggerFactory.getLogger(SlideScoreImportTMAsCommand.class);
+    private static final Logger logger = LoggerFactory.getLogger(SlideScoreImportTMAsCommand.class);
 
     private QuPathGUI qupath;
 
@@ -53,6 +58,7 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
     }
 
     private String presetQuestion;
+    private String presetColor;
     private String presetEmail;
     private Boolean setNames = false;
 
@@ -149,7 +155,7 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
                             var typeObject = new SlideScoreAnnotation[0];
 
                             var annotations = GsonTools.getInstance().fromJson(json, (Class<SlideScoreAnnotation[]>) typeObject.getClass());
-                            importAnnotation(annotations, imageData, setNames ? a.question + " by " + a.email : null);
+                            importAnnotation(annotations, imageData, setNames ? a.question + " by " + a.email : null, a.color);
                             count++;
                         } catch (JsonSyntaxException ex) {
                             throw new IOException("Parsing of answers failed", ex);
@@ -170,17 +176,34 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
             Dialogs.showErrorMessage("Slide Score Answers Import", "It seems that multiple versions of the Slide Score plugin are loaded. Can you please remove older versions of the plugin from the extensions directory and leave only qupath-extension-slidescore-0.3.1.jar");
             try {
                 Thread.sleep(3000);
-                Desktop.getDesktop().open(QuPathGUI.getExtensionDirectory());
+                var extensionClassLoader = ExtensionClassLoader.getInstance();;
+                var dir = extensionClassLoader.getExtensionsDirectory();
+                Desktop.getDesktop().open(dir.toFile());
             } catch (Exception e) {
             }
         }
     }
 
-    private void importAnnotation(SlideScoreAnnotation[] annotations, ImageData<BufferedImage> imageData, String name) {
+    private void importAnnotation(SlideScoreAnnotation[] annotations, ImageData<BufferedImage> imageData, String name, Integer color) {
+		if (annotations.length > 0 && annotations[0].type == null) {
+            var points = new ArrayList<Point2>();
+			for (var i=0;i<annotations.length;i++) {
+				points.add(new Point2(annotations[i].x, annotations[i].y));
+			}
+            var roi = ROIs.createPointsROI(points, ImagePlane.getDefaultPlane());
+			var annotation = PathObjects.createAnnotationObject(roi, PathClassFactory.getPathClass("PathAnnotationObject"));
+			if (setNames)
+				annotation.setName(name);
+            if (color != null)
+                annotation.setColorRGB(color);
+			imageData.getHierarchy().addPathObject(annotation);
+			return;
+		}
+
         for (var i=0;i<annotations.length;i++) {
             var a = annotations[i];
             ROI roi = null;
-            switch (a.type) {
+            switch (a.type.toLowerCase()) {
                 case "rect": {
                     // Create a new Rectangle ROI
                     roi = ROIs.createRectangleROI(a.corner.getX(), a.corner.getY(), a.size.getX(), a.size.getY(), ImagePlane.getDefaultPlane());
@@ -188,7 +211,7 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
                 }
                 case "ellipse": {
                     // Create a new ROI
-                    roi = ROIs.createEllipseROI(a.center.getX()-a.size.getX(), a.center.getY()-a.size.getY(), a.size.getX()*2, a.size.getY()*2, ImagePlane.getDefaultPlane());
+                    roi = ROIs.createEllipseROI(a.center.getX() - a.size.getX(), a.center.getY() - a.size.getY(), a.size.getX() * 2, a.size.getY() * 2, ImagePlane.getDefaultPlane());
 
                     break;
                 }
@@ -199,24 +222,31 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
                 }
                 case "brush": {
                     var area = new Area();
-                    for (var j=0;j<a.positivePolygons.length;j++) {
+                    for (var j = 0; j < a.positivePolygons.length; j++) {
                         // Create a new ROI
                         var roiPartial = ROIs.createPolygonROI(Arrays.asList(a.positivePolygons[j]), ImagePlane.getDefaultPlane());
                         area.add(new Area(roiPartial.getShape()));
                     }
-                    for (var j=0;j<a.negativePolygons.length;j++) {
+                    for (var j = 0; j < a.negativePolygons.length; j++) {
                         var roiPartial = ROIs.createPolygonROI(Arrays.asList(a.negativePolygons[j]), ImagePlane.getDefaultPlane());
                         area.subtract(new Area(roiPartial.getShape()));
                     }
                     roi = ROIs.createAreaROI(area, ImagePlane.getDefaultPlane());
                     break;
                 }
+                default: {
+                    logger.warn("Encountered unknown annotation type "+a.type);
+                    break;
+                }
             }
             if (roi != null) {
                 // Create & new annotation & add it to the object hierarchy
-                var annotation = PathObjects.createAnnotationObject(roi, PathClassFactory.getPathClass("Region"));
+                var annotation = PathObjects.createAnnotationObject(roi, PathClassFactory.getPathClass("PathAnnotationObject"));
                 if (setNames)
                     annotation.setName(name);
+                if (color != null)
+                    annotation.setColorRGB(color);
+
                 imageData.getHierarchy().addPathObject(annotation);
             }
         }

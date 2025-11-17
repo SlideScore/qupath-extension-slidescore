@@ -2,13 +2,11 @@ package qupath.lib.images.servers.slidescore;
 
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
-import javafx.application.Application;
+import io.tus.java.client.ProtocolException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.lib.gui.QuPathApp;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.dialogs.Dialogs;
-import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.images.servers.*;
 import qupath.lib.images.servers.ImageServerBuilder.ServerBuilder;
 import qupath.lib.io.GsonTools;
@@ -19,16 +17,14 @@ import qupath.lib.projects.Project;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.*;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
 
-import static qupath.lib.scripting.QP.getProject;
+import io.tus.java.client.*;
+
 
 /**
  * ImageServer implementation using Slide Score.
@@ -133,7 +129,7 @@ public class SlideScoreImageServer extends AbstractTileableImageServer implement
 							magnification(json.get("ObjectivePower").getAsDouble()).
 							levels(levels).
 							build();
-					logger.info("created metadata with level0tilewidth "+level0TileWidth);
+					logger.info("Opened Slide Score image and created metadata with level0tilewidth "+level0TileWidth+" v"+SlideScoreImageServerBuilder.version);
 				}
 				catch (JsonSyntaxException ex) {
 					throw new IOException("Parsing of metadata failed", ex);
@@ -217,11 +213,14 @@ public class SlideScoreImageServer extends AbstractTileableImageServer implement
 					var answer = new SlideScoreAnswer();
 					answer.question = terms[0];
 					answer.email = terms[1];
-					answer.value = terms[2];
+					answer.value = terms.length > 2 ? terms[2] : "";
 					if (question != null && answer.question.compareToIgnoreCase(question) != 0)
 						continue;
 					if (email != null && answer.email.compareToIgnoreCase(email) != 0)
 						continue;
+					var color =  terms.length > 3 ? terms[3] : "";
+					if (color.startsWith("#"))
+						answer.color = Integer.parseInt(color.replaceFirst("#", ""), 16);
 					ret.add(answer);
 				}
 				return ret.toArray(new SlideScoreAnswer[0]);
@@ -266,23 +265,38 @@ public class SlideScoreImageServer extends AbstractTileableImageServer implement
 		var annoQs = new ArrayList<String>();
 		for(var i=0;i<qs.length;i++) {
 			var terms = qs[i].split(";");
-			if (terms[1].equals("AnnoShapes"))
+			if (terms[1].startsWith("Anno"))
 				annoQs.add(terms[0]);
 		}
 		return annoQs.toArray(new String[0]);
 	}
 
+	public String[] getAnnotationShapeQuestions() throws IOException {
+		var qs = getQuestions();
+		var annoQs = new ArrayList<String>();
+		for(var i=0;i<qs.length;i++) {
+			var terms = qs[i].split(";");
+			if (terms[1].equals("AnnoShapes"))
+				annoQs.add(terms[0]);
+		}
+		return annoQs.toArray(new String[0]);
+	}
+	public String postLargeAnnotation(String question, String answer) throws IOException {
+		return postLargeAnnotation(question, answer, 0);
+	}
 
-	public String postAnnotation(String question, String answer) throws IOException {
-		var url = new URL(uri.toString().replace("SlideScoreMetadata", "AnnoAnswer"));
+	private String makeRequest(String endUrl, Map<String, String> args) throws IOException {
+		var url = new URL(uri.toString().replace("SlideScoreMetadata", endUrl));
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		try {
 			con.setRequestMethod("POST");
 			StringBuilder postData = new StringBuilder();
-			postData.append("question=");
-			postData.append(URLEncoder.encode(question, "UTF-8"));
-			postData.append("&answer=");
-			postData.append(URLEncoder.encode(answer, "UTF-8"));
+			for (var entry : args.entrySet()) {
+				postData.append(entry.getKey())
+						.append('=')
+						.append(URLEncoder.encode(entry.getValue(), "UTF-8"))
+						.append('&');
+			}
 			byte[] postDataBytes = postData.toString().getBytes("UTF-8");
 
 			con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
@@ -300,14 +314,80 @@ public class SlideScoreImageServer extends AbstractTileableImageServer implement
 					content.append("\n");
 				}
 				return content.toString();
-			}
-			finally {
+			} finally {
 				in.close();
 			}
+		}
+		catch (UnsupportedEncodingException e) {
+			throw new IOException("Failed to encode",e);
 		}
 		finally {
 			con.disconnect();
 		}
+	}
+
+	public String postLargeAnnotation(String question, String answer, int tmaCoreId) throws IOException {
+		File temp = File.createTempFile("qupath_anno_", ".json.gz");
+		try (FileOutputStream output = new FileOutputStream(temp);
+			 Writer writer = new OutputStreamWriter(new java.util.zip.GZIPOutputStream(output), "UTF-8")) {
+			writer.write(answer);
+		}
+		var argsCreate = Map.of("question", question);
+		if (tmaCoreId > 0)
+			argsCreate.put("tmaCoreId", String.valueOf(tmaCoreId));
+		var anno2Ret = makeRequest("CreateAnno2", argsCreate);
+
+		String uploadToken, apiToken, annoUUID;
+		try {
+			var json = JsonParser.parseString(anno2Ret.toString()).getAsJsonObject();
+			String isSuccess = json.get("success").getAsString();
+			if (isSuccess != "true")
+				throw new IOException("Creating anno2 record failed: " + json.get("error").getAsString());
+
+			uploadToken = json.get("uploadToken").getAsString();
+			apiToken = json.get("apiToken").getAsString();
+			annoUUID = json.get("annoUUID").getAsString();
+			logger.info("Created anno2 record " + annoUUID);
+
+		} catch (JsonSyntaxException ex) {
+			throw new IOException("Creating anno2 record failed", ex);
+		}
+		try {
+			TusClient client = new TusClient();
+			var appRoot = uri.toString().substring(0, uri.toString().indexOf("/i/"));
+			client.setUploadCreationURL(new URL(appRoot + "/files"));
+			TusUpload upload = new TusUpload(temp);
+			upload.setMetadata(Map.of(
+					"filename", temp.getName(),
+					"uploadtoken", uploadToken,
+					"apitoken", apiToken));
+			var uploader = client.createUpload(upload);
+			uploader.setChunkSize(5 * 1024 * 1024);
+			do {
+			} while (uploader.uploadChunk() > -1);
+			uploader.finish();
+			logger.info("Uploaded data for large annotation for question "+question);
+			var uploadId = uploader.getUploadURL().getFile().replace("/files/","");
+
+			var anno2Finish = makeRequest("FinishAnno2Upload", Map.of("uploadToken", uploadToken, "uploadId", uploadId, "apiToken", apiToken));
+			try {
+				var json = JsonParser.parseString(anno2Finish.toString()).getAsJsonObject();
+				String isSuccess = json.get("success").getAsString();
+				if (isSuccess != "true")
+					throw new IOException("Completing anno2 record failed: " + json.get("error").getAsString());
+			} catch (JsonSyntaxException ex) {
+				throw new IOException("Completing anno2 record failed", ex);
+			}
+			logger.info("Completed anno2 for question "+question);
+			return anno2Finish;
+		} catch (ProtocolException e) {
+			throw new IOException("Uploading anno2 data failed", e);
+		}
+	}
+
+
+	public String postAnnotation(String question, String answer) throws IOException {
+		return makeRequest("AnnoAnswer", Map.of("question", question, "answer", answer));
 	}
 
 

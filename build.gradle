@@ -1,7 +1,20 @@
+plugins {
+    // Don't need extension-conventions because we don't require access to the UI
+    id 'qupath.common-conventions'
+    id 'java-library'
+    alias(libs.plugins.javafx)
+}
+
 ext.moduleName = 'qupath.extension.slidescore'
+archivesBaseName = 'qupath-extension-slidescore'
+description = "QuPath extension to support image reading using Slide Score."
 
-description = 'qupath-extension-slidescore'
+String nativesClassifier = properties['platform.classifier']
 
-configurations {
-    implementation.extendsFrom picocli
+dependencies {
+    implementation project(':qupath-core')
+    implementation project(':qupath-gui-fx')
+    implementation libs.picocli
+
+    implementation 'io.tus.java.client:tus-java-client:0.5.0'
 }
