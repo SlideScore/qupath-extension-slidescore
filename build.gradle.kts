@@ -14,6 +14,13 @@ base {
     archivesName = "qupath-extension-slidescore"
     description = "QuPath extension to support image reading using SlideScore."
 }
+tasks.jar {
+    from({
+        configurations.runtimeClasspath.get()
+                .filter { it.name.startsWith("tus-java-client") }
+                .map { zipTree(it) }
+    })
+}
 
 val platform = Utils.currentPlatform()
 dependencies {
