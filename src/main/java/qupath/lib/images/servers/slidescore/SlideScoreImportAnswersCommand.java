@@ -40,7 +40,7 @@ import java.util.Locale;
 @Command(name = "slidescore-importanswers", description = "Import answers (results) from Slide Score for a slide.", sortOptions = false)
 public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
 
-    private static final Logger logger = LoggerFactory.getLogger(SlideScoreImportTMAsCommand.class);
+    private static final Logger logger = LoggerFactory.getLogger(SlideScoreImportAnswersCommand.class);
 
     private QuPathGUI qupath;
 
