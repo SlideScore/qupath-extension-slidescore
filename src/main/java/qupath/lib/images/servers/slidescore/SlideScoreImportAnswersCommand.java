@@ -14,6 +14,7 @@ import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.io.GsonTools;
+import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjects;
 import qupath.lib.objects.classes.PathClassFactory;
 import qupath.lib.regions.ImagePlane;
@@ -61,6 +62,12 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
     private String presetEmail;
     private Boolean setNames = false;
 
+    public Boolean dontAddAnnotations = false;
+    private SlideScoreAnswer[] answers;
+
+    private SlideScoreAnnotation[] annotations;
+    private ArrayList<PathObject> pathObjects;
+
     /**
      * Import only answers for this question. Leave empty to query the user with a list of questions
      *
@@ -85,6 +92,7 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
     public void disableNames() {
         setNames = false;
     }
+
 
     @Override
     public void run() {
@@ -120,7 +128,7 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
                     else
                         presetQuestion = firstq;
                 }
-                var answers = ssServer.getAnswers(presetQuestion, presetEmail);
+                answers = ssServer.getAnswers(presetQuestion, presetEmail);
                 if (answers.length == 0) {
                     Dialogs.showInfoNotification("Slide Score Answers Import", "No answers found.");
                     return;
@@ -153,8 +161,9 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
                             var json = JsonParser.parseString(a.value).getAsJsonArray();
                             var typeObject = new SlideScoreAnnotation[0];
 
-                            var annotations = GsonTools.getInstance().fromJson(json, (Class<SlideScoreAnnotation[]>) typeObject.getClass());
-                            importAnnotation(annotations, imageData, setNames ? a.question + " by " + a.email : null, a.color);
+                            annotations = GsonTools.getInstance().fromJson(json, (Class<SlideScoreAnnotation[]>) typeObject.getClass());
+                            if (!dontAddAnnotations)
+                                importAnnotation(annotations, imageData, setNames ? a.question + " by " + a.email : null, a.color);
                             count++;
                         } catch (JsonSyntaxException ex) {
                             throw new IOException("Parsing of answers failed", ex);
@@ -162,7 +171,7 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
 
                     }
                 }
-                if (count > 0)
+                if (count > 0 && !dontAddAnnotations)
                     Dialogs.showInfoNotification("Slide Score Answers Import", "Imported "+count+" annotations.");
                 presetEmail = null;
                 presetQuestion = null;
@@ -174,6 +183,11 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
         } catch (java.lang.NoSuchMethodError ex) {
             Dialogs.showErrorMessage("Slide Score Answers Import", "It seems that multiple versions of the Slide Score plugin are loaded. Can you please remove older versions of the plugin from the extensions directory and leave only qupath-extension-slidescore-0.5.0.jar");
         }
+    }
+
+    public SlideScoreAnswer[] getAnswers()
+    {
+        return answers;
     }
 
     private void importAnnotation(SlideScoreAnnotation[] annotations, ImageData<BufferedImage> imageData, String name, Integer color) {
@@ -188,7 +202,9 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
 				annotation.setName(name);
             if (color != null)
                 annotation.setColor(color);
-			imageData.getHierarchy().addObject(annotation);
+            pathObjects.add(annotation);
+            if (!dontAddAnnotations)
+    			imageData.getHierarchy().addObject(annotation);
 			return;
 		}
 
@@ -239,7 +255,9 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
                 if (color != null)
                     annotation.setColor(color);
 
-                imageData.getHierarchy().addObject(annotation);
+                pathObjects.add(annotation);
+                if (!dontAddAnnotations)
+                    imageData.getHierarchy().addObject(annotation);
             }
         }
     }
