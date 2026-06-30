@@ -11,6 +11,7 @@ import qupath.lib.images.servers.ImageServer;
 import qupath.lib.objects.PathObjects;
 import qupath.lib.objects.TMACoreObject;
 import qupath.lib.objects.hierarchy.DefaultTMAGrid;
+import qupath.lib.plugins.workflow.DefaultScriptableWorkflowStep;
 import picocli.CommandLine.Command;
 
 import java.awt.image.BufferedImage;
@@ -132,6 +133,10 @@ public class SlideScoreImportTMAsCommand implements Runnable, Subcommand {
             }
             var myTMAGrid = DefaultTMAGrid.create(cores, maxCol);
             imageData.getHierarchy().setTMAGrid(myTMAGrid);
+            // Log to the workflow history so the command can be turned into a script
+            imageData.getHistoryWorkflow().addStep(new DefaultScriptableWorkflowStep(
+                    "Import TMA positions from Slide Score",
+                    "new qupath.lib.images.servers.slidescore.SlideScoreImportTMAsCommand().run(getCurrentImageData())"));
         } catch (Exception ex) {
             Dialogs.showErrorMessage("Slide Score TMA Import", "Getting TMA cores positions failed, see log.");
             logger.error(ex.getLocalizedMessage());

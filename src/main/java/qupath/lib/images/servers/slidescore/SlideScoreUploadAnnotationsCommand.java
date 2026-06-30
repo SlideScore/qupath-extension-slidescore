@@ -15,6 +15,7 @@ import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathROIObject;
 import qupath.lib.objects.TMACoreObject;
 import qupath.lib.objects.hierarchy.TMAGrid;
+import qupath.lib.plugins.workflow.DefaultScriptableWorkflowStep;
 import qupath.lib.roi.*;
 
 import java.awt.image.BufferedImage;
@@ -274,6 +275,12 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
             else
                 ssServer.postAnnotation(q, json);
             logger.info("Successfully uploaded annotations");
+            // Log to the workflow history so the command can be turned into a script
+            if (q != null)
+                imageData.getHistoryWorkflow().addStep(new DefaultScriptableWorkflowStep(
+                        "Upload selected annotations to Slide Score",
+                        "qupath.lib.images.servers.slidescore.SlideScoreUploadAnnotationsCommand.submitAnnotations(getCurrentImageData(), getSelectedObjects(), \""
+                                + q.replace("\\", "\\\\").replace("\"", "\\\"") + "\")"));
         } catch (Exception ex) {
             Dialogs.showErrorMessage("Slide Score annotation upload", "Annotation upload failed, see log.");
             logger.error(ex.getLocalizedMessage());

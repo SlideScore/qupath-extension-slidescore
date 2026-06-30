@@ -17,6 +17,7 @@ import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjects;
 import qupath.lib.objects.classes.PathClassFactory;
+import qupath.lib.plugins.workflow.DefaultScriptableWorkflowStep;
 import qupath.lib.regions.ImagePlane;
 import qupath.lib.roi.PointsROI;
 import qupath.lib.roi.ROIs;
@@ -170,8 +171,21 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
 
                     }
                 }
-                if (count > 0 && !dontAddAnnotations)
-                    Dialogs.showInfoNotification("Slide Score Answers Import", "Imported "+count+" annotations.");
+                if (count > 0 && !dontAddAnnotations) {
+                    int importedCount = count;
+                    Platform.runLater(() -> Dialogs.showInfoNotification("Slide Score Answers Import", "Imported "+importedCount+" annotations."));
+
+                    // Log to the workflow history so the command can be turned into a script
+                    StringBuilder script = new StringBuilder();
+                    script.append("def importer = new qupath.lib.images.servers.slidescore.SlideScoreImportAnswersCommand()\n");
+                    if (presetQuestion != null)
+                        script.append("importer.setQuestion(\"").append(presetQuestion.replace("\\", "\\\\").replace("\"", "\\\"")).append("\")\n");
+                    if (presetEmail != null)
+                        script.append("importer.setEmail(\"").append(presetEmail.replace("\\", "\\\\").replace("\"", "\\\"")).append("\")\n");
+                    script.append("importer.run(getCurrentImageData())");
+                    imageData.getHistoryWorkflow().addStep(new DefaultScriptableWorkflowStep(
+                            "Download annotations from Slide Score", script.toString()));
+                }
                 presetEmail = null;
                 presetQuestion = null;
 
