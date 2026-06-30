@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.dialogs.Dialogs;
+import javafx.application.Platform;
 import qupath.lib.images.servers.*;
 import qupath.lib.images.servers.ImageServerBuilder.ServerBuilder;
 import qupath.lib.io.GsonTools;
@@ -141,7 +142,7 @@ public class SlideScoreImageServer extends AbstractTileableImageServer implement
 		}
 		catch (IOException ex) {
 			if (ex.getMessage().indexOf("503") != -1) {
-				Dialogs.showMessageDialog("Unable to open the slide", "We can't open this slide on the server. Either it's not there, or the link you've used has expired. Try requesting a new link by opening the study in your browser and clicking the Open in QuPath button.");
+				Platform.runLater(() -> Dialogs.showMessageDialog("Unable to open the slide", "We can't open this slide on the server. Either it's not there, or the link you've used has expired. Try requesting a new link by opening the study in your browser and clicking the Open in QuPath button."));
 				return;
 			}
 			throw ex;

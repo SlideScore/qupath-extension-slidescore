@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.dialogs.Dialogs;
+import javafx.application.Platform;
 import qupath.lib.gui.extensions.Subcommand;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.images.ImageData;
@@ -52,19 +53,19 @@ public class SlideScoreImportTMAsCommand implements Runnable, Subcommand {
 
     public void run(ImageData<BufferedImage> imageData) {
         if (imageData == null) {
-            Dialogs.showNoImageError("Slide Score TMA Import");
+            Platform.runLater(() -> Dialogs.showNoImageError("Slide Score TMA Import"));
             return;
         }
         ImageServer<BufferedImage> server = imageData.getServer();
         if (!(server instanceof SlideScoreImageServer)) {
-            Dialogs.showErrorMessage("Slide Score TMA Import", "This command only works for Slide Score slides.");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score TMA Import", "This command only works for Slide Score slides."));
             return;
         }
         var ssServer = (SlideScoreImageServer) server;
         try {
             var poss = ssServer.getTMAPositions();
             if (poss.cores.length == 0) {
-                Dialogs.showInfoNotification("Slide Score TMA Import", "No TMA core positions found.");
+                Platform.runLater(() -> Dialogs.showInfoNotification("Slide Score TMA Import", "No TMA core positions found."));
                 return;
             }
             var width =ssServer.getOriginalMetadata().getWidth();
@@ -138,7 +139,7 @@ public class SlideScoreImportTMAsCommand implements Runnable, Subcommand {
                     "Import TMA positions from Slide Score",
                     "new qupath.lib.images.servers.slidescore.SlideScoreImportTMAsCommand().run(getCurrentImageData())"));
         } catch (Exception ex) {
-            Dialogs.showErrorMessage("Slide Score TMA Import", "Getting TMA cores positions failed, see log.");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score TMA Import", "Getting TMA cores positions failed, see log."));
             logger.error(ex.getLocalizedMessage());
         }
     }

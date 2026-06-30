@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Command;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.dialogs.Dialogs;
+import javafx.application.Platform;
 import qupath.lib.gui.extensions.Subcommand;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.images.ImageData;
@@ -128,12 +129,12 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
 
     private static boolean submitAnswer(ImageData<BufferedImage> imageData, String question, String answer, TmaGetter fGetAnswer) {
         if (imageData == null) {
-            Dialogs.showNoImageError("Slide Score answer upload");
+            Platform.runLater(() -> Dialogs.showNoImageError("Slide Score answer upload"));
             return false;
         }
         ImageServer<BufferedImage> server = imageData.getServer();
         if (!(server instanceof SlideScoreImageServer)) {
-            Dialogs.showErrorMessage("Slide Score answer upload", "This command only works for Slide Score slides.");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score answer upload", "This command only works for Slide Score slides."));
             return false;
         }
         var ssServer = (SlideScoreImageServer) server;
@@ -160,7 +161,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
             logger.info("Successfully uploaded answer");
             return true;
         } catch (Exception ex) {
-            Dialogs.showErrorMessage("Slide Score answer upload", "Answer upload failed, see log.");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score answer upload", "Answer upload failed, see log."));
             logger.error(ex.getLocalizedMessage());
         }
         return false;
@@ -197,11 +198,11 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
         var annotations = viewer.getAllSelectedObjects();
         if (annotations.size() == 0)
         {
-            Dialogs.showErrorMessage("Slide Score annotation upload", "You need to select annotations before uploading them. Go to the 'Annotations' tab and click an annotation from the list to select it, ctrl+click or shift+click to add it to selection.");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "You need to select annotations before uploading them. Go to the 'Annotations' tab and click an annotation from the list to select it, ctrl+click or shift+click to add it to selection."));
             return;
         }
         if (imageData == null) {
-            Dialogs.showNoImageError("Slide Score annotation upload");
+            Platform.runLater(() -> Dialogs.showNoImageError("Slide Score annotation upload"));
             return;
         }
         submitAnnotations(imageData, annotations, presetQuestion);
@@ -217,14 +218,14 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
     public static void submitAnnotations(ImageData<BufferedImage> imageData, Collection<PathObject> annotations, String question) {
         ImageServer<BufferedImage> server = imageData.getServer();
         if (!(server instanceof SlideScoreImageServer)) {
-            Dialogs.showErrorMessage("Slide Score annotation upload", "This command only works for Slide Score slides.");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "This command only works for Slide Score slides."));
             return;
         }
         var ssServer = (SlideScoreImageServer) server;
         try {
             var annoQs = ssServer.getAnnotationShapeQuestions();
             if (question == null && annoQs.length == 0) {
-                Dialogs.showErrorMessage("Slide Score annotation upload", "No annotation type questions found.");
+                Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "No annotation type questions found."));
                 return;
             }
             boolean hasPoints = false;
@@ -241,7 +242,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
                 }
             }
             if (hasPoints && hasNonPoints) {
-                Dialogs.showErrorMessage("Slide Score annotation upload", "Cannot upload points annotations and other types together. Select only the points and upload it separately.");
+                Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "Cannot upload points annotations and other types together. Select only the points and upload it separately."));
                 return;
             }
             String q;
@@ -282,7 +283,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
                         "qupath.lib.images.servers.slidescore.SlideScoreUploadAnnotationsCommand.submitAnnotations(getCurrentImageData(), getSelectedObjects(), \""
                                 + q.replace("\\", "\\\\").replace("\"", "\\\"") + "\")"));
         } catch (Exception ex) {
-            Dialogs.showErrorMessage("Slide Score annotation upload", "Annotation upload failed, see log.");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "Annotation upload failed, see log."));
             logger.error(ex.getLocalizedMessage());
         }
     }
@@ -298,7 +299,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
     public static void submitTMAAnnotations(ImageData<BufferedImage> imageData, Collection<PathObject> annotations, String question, TMACoreObject core) {
         ImageServer<BufferedImage> server = imageData.getServer();
         if (!(server instanceof SlideScoreImageServer)) {
-            Dialogs.showErrorMessage("Slide Score annotation upload", "This command only works for Slide Score slides.");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "This command only works for Slide Score slides."));
             return;
         }
         var ssServer = (SlideScoreImageServer) server;
@@ -311,7 +312,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
                     annoQs.add(terms[0]);
             }
             if (question == null && annoQs.size() == 0) {
-                Dialogs.showErrorMessage("Slide Score annotation upload", "No annotation type questions found.");
+                Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "No annotation type questions found."));
                 return;
             }
             boolean hasPoints = false;
@@ -328,7 +329,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
                 }
             }
             if (hasPoints && hasNonPoints) {
-                Dialogs.showErrorMessage("Slide Score annotation upload", "Cannot upload points annotations and other types together. Select only the points and upload it separately.");
+                Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "Cannot upload points annotations and other types together. Select only the points and upload it separately."));
                 return;
             }
             String q;
@@ -361,11 +362,11 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
             }
             ssServer.postAnnotation(q, json);
             if (json.length() > 0)
-                Dialogs.showInfoNotification("Slide Score Annotation Upload", "Uploaded annotations.");
+                Platform.runLater(() -> Dialogs.showInfoNotification("Slide Score Annotation Upload", "Uploaded annotations."));
 
             logger.info("Successfully uploaded annotations");
         } catch (Exception ex) {
-            Dialogs.showErrorMessage("Slide Score Annotation Upload", "Annotation upload failed, see log.");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score Annotation Upload", "Annotation upload failed, see log."));
             logger.error("Annotation upload failed", ex);
         }
     }

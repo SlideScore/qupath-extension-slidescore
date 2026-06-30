@@ -8,6 +8,7 @@ import picocli.CommandLine.Command;
 import qupath.lib.geom.Point2;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.dialogs.Dialogs;
+import javafx.application.Platform;
 import qupath.lib.gui.extensions.Subcommand;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.viewer.QuPathViewer;
@@ -102,22 +103,21 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
     }
 
     public void run(ImageData<BufferedImage> imageData) {
-        QuPathViewer viewer = qupath.getViewer();
         if (imageData == null) {
-            Dialogs.showNoImageError("Slide Score Answers Import");
+            Platform.runLater(() -> Dialogs.showNoImageError("Slide Score Answers Import"));
             return;
         }
         try {
             ImageServer<BufferedImage> server = imageData.getServer();
             if (!(server instanceof SlideScoreImageServer)) {
-                Dialogs.showErrorMessage("Slide Score Answers Import", "This command only works for Slide Score slides.");
+                Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score Answers Import", "This command only works for Slide Score slides."));
                 return;
             }
             var ssServer = (SlideScoreImageServer) server;
             try {
                 var annoQs = ssServer.getAnnotationQuestions();
                 if (presetQuestion == null && annoQs.length == 0) {
-                    Dialogs.showErrorMessage("Slide Score annotation upload", "No annotation type questions found.");
+                    Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "No annotation type questions found."));
                     return;
                 }
 
@@ -130,7 +130,7 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
                 }
                 answers = ssServer.getAnswers(presetQuestion, presetEmail);
                 if (answers.length == 0) {
-                    Dialogs.showInfoNotification("Slide Score Answers Import", "No answers found.");
+                    Platform.runLater(() -> Dialogs.showInfoNotification("Slide Score Answers Import", "No answers found."));
                     return;
                 }
                 if (presetEmail == null) {
@@ -190,11 +190,11 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
                 presetQuestion = null;
 
             } catch (Exception ex) {
-                Dialogs.showErrorMessage("Slide Score Answers Import", "Getting answers failed, see log.");
+                Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score Answers Import", "Getting answers failed, see log."));
                 logger.error("Getting answers failed", ex);
             }
         } catch (java.lang.NoSuchMethodError ex) {
-            Dialogs.showErrorMessage("Slide Score Answers Import", "It seems that multiple versions of the Slide Score plugin are loaded. Can you please remove older versions of the plugin from the extensions directory and leave only qupath-extension-slidescore-0.5.0.jar");
+            Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score Answers Import", "It seems that multiple versions of the Slide Score plugin are loaded. Can you please remove older versions of the plugin from the extensions directory and leave only qupath-extension-slidescore-0.5.0.jar"));
         }
     }
 
@@ -202,6 +202,8 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
     {
         return answers;
     }
+
+    
 
     private void importAnnotation(SlideScoreAnnotation[] annotations, ImageData<BufferedImage> imageData, String name, Integer color) {
 		if (annotations.length > 0 && annotations[0].type == null) {
