@@ -66,7 +66,6 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
     private SlideScoreAnswer[] answers;
 
     private SlideScoreAnnotation[] annotations;
-    private ArrayList<PathObject> pathObjects;
 
     /**
      * Import only answers for this question. Leave empty to query the user with a list of questions
@@ -202,7 +201,6 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
 				annotation.setName(name);
             if (color != null)
                 annotation.setColor(color);
-            pathObjects.add(annotation);
             if (!dontAddAnnotations)
     			imageData.getHierarchy().addObject(annotation);
 			return;
@@ -255,7 +253,6 @@ public class SlideScoreImportAnswersCommand implements Runnable, Subcommand {
                 if (color != null)
                     annotation.setColor(color);
 
-                pathObjects.add(annotation);
                 if (!dontAddAnnotations)
                     imageData.getHierarchy().addObject(annotation);
             }
