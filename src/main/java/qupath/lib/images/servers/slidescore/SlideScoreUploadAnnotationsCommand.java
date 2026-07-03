@@ -1,6 +1,7 @@
 package qupath.lib.images.servers.slidescore;
 
 import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.MultiPolygon;
 import org.locationtech.jts.geom.Polygon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,7 @@ import qupath.lib.objects.TMACoreObject;
 import qupath.lib.objects.hierarchy.TMAGrid;
 import qupath.lib.plugins.workflow.DefaultScriptableWorkflowStep;
 import qupath.lib.roi.*;
+import qupath.lib.roi.interfaces.ROI;
 
 import java.awt.image.BufferedImage;
 import java.util.*;
@@ -37,7 +39,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
     }
 
     public static class TmaAnnoGetter {
-        public String getAnswer( Collection<PathObject> annotations, TMACoreObject tma) {
+        public String getAnswer( Collection<PathObject> annotations, TMACoreObject tma) throws Exception {
             var geom = tma.getROI().getGeometry();
             var objects =  annotations.stream().filter(obj -> geom.contains(obj.getROI().getGeometry())).collect(Collectors.toList());
             return annotationsToJson(objects);
@@ -296,7 +298,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
      * @param question
      * @param core
      */
-    public static void submitTMAAnnotations(ImageData<BufferedImage> imageData, Collection<PathObject> annotations, String question, TMACoreObject core) {
+    public static void submitTMAAnnotations(ImageData<BufferedImage> imageData, Collection<PathObject> annotations, String question, TMACoreObject core) throws Exception  {
         ImageServer<BufferedImage> server = imageData.getServer();
         if (!(server instanceof SlideScoreImageServer)) {
             Platform.runLater(() -> Dialogs.showErrorMessage("Slide Score annotation upload", "This command only works for Slide Score slides."));
@@ -372,7 +374,7 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
     }
 
 
-    private static String annotationsToJson(Collection<PathObject> objects) {
+    private static String annotationsToJson(Collection<PathObject> objects) throws Exception {
         boolean hasGeometry = false;
         StringJoiner mainsj = new StringJoiner(",");
         for (PathObject obj : objects) {
@@ -420,21 +422,28 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
             ArrayList<Coordinate[]> positives = new ArrayList<Coordinate[]>();
             ArrayList<Coordinate[]> negatives = new ArrayList<Coordinate[]>();
             for (PathObject obj : objects) {
-                if (!(obj instanceof PathROIObject))
+                ROI roi = obj.getROI();
+                if (roi == null)
                     continue;
-                var anno = (PathROIObject) obj;
-                var roi = anno.getROI();
                 if (roi instanceof GeometryROI) {
                     GeometryROI geo = (GeometryROI) roi;
-                    if (geo.getGeometry() instanceof Polygon) {
-                        Polygon polygon = (Polygon) geo.getGeometry();
-                        positives.add(polygon.getExteriorRing().getCoordinates());
-                        for (int i=0;i<polygon.getNumInteriorRing();i++) {
-                            negatives.add(polygon.getInteriorRingN(i).getCoordinates());
+                    var geoGeo =geo.getGeometry();
+                    if (geoGeo instanceof Polygon) {
+                        Polygon polygon = (Polygon) geoGeo;
+                        extractPolygons(positives, polygon, negatives);
+                    } else if (geoGeo instanceof MultiPolygon)
+                    {
+                        var multiPolygon = ((MultiPolygon)geoGeo);
+                        for (int i = 0; i < multiPolygon.getNumGeometries(); i++) {
+                            var geometry = multiPolygon.getGeometryN(i);
+                            extractPolygons(positives, (Polygon)geometry, negatives);
                         }
                     }
+
                 }
             }
+            if (positives.size() == 0 && negatives.size() == 0)
+                throw new Exception("Failed to find annotations to import. Too complex?");
             StringJoiner sj = new StringJoiner(",");
             String brushJson = "{ \"type\": \"brush\", \"positivePolygons\": [";
             for (Coordinate[] coords: positives) {
@@ -455,5 +464,12 @@ public class SlideScoreUploadAnnotationsCommand implements Runnable, Subcommand 
             mainsj.add(brushJson);
         }
         return "[" + mainsj.toString() + "]";
+    }
+
+    private static void extractPolygons(ArrayList<Coordinate[]> positives, Polygon polygon, ArrayList<Coordinate[]> negatives) {
+        positives.add(polygon.getExteriorRing().getCoordinates());
+        for (int i = 0; i< polygon.getNumInteriorRing(); i++) {
+            negatives.add(polygon.getInteriorRingN(i).getCoordinates());
+        }
     }
 }
